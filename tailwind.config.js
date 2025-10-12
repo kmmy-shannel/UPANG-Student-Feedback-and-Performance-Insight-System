@@ -44,7 +44,10 @@ module.exports = {
         lightsidebarshadow: '7px 0 15px 0 rgba(69, 90, 100, 0.09)'
       },
       colors: {
+          upangGreen: '#2d5a27',
+        upangGold: '#d4af37',
         theme: {
+          
           headings: '#1d2630',
           bodycolor: '#888',
           bodybg: '#f4f7fa',

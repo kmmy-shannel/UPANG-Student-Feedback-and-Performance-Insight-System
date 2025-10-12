@@ -1,52 +1,67 @@
 <?php
 session_start();
-require_once __DIR__ . '/dist/includes/db_config.php';
+require_once __DIR__ . '/dist/config/db_config.php';
 
 
 
 if (isset($_POST['submit'])) {
-    $email = trim($_POST['email']);
-    $password = $_POST['password'];
+    $username = trim($_POST['username'] ?? '');
+    $password = $_POST['password'] ?? '';
 
-    if (!empty($email) && !empty($password)) {
+    if ($username !== '' && $password !== '') {
         try {
             $db = new Database();
             $conn = $db->getConnection();
 
-            $stmt = $conn->prepare("SELECT * FROM users WHERE email = :email AND status = 'active' LIMIT 1");
-            $stmt->bindParam(":email", $email);
+            // If username is digits only => student_id, otherwise treat as email.
+            if (ctype_digit($username)) {
+                $sql = "SELECT * FROM users WHERE student_id = :username AND status = 'active' LIMIT 1";
+            } else {
+                $sql = "SELECT * FROM users WHERE email = :username AND status = 'active' LIMIT 1";
+            }
+
+            $stmt = $conn->prepare($sql);
+            // always bind as string (student_id is varchar in your schema)
+            $stmt->bindValue(":username", $username, PDO::PARAM_STR);
             $stmt->execute();
-            $user = $stmt->fetch();
+            $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if ($user && password_verify($password, $user['password_hash'])) {
                 // Store session
                 $_SESSION['user_id'] = $user['user_id'];
-                $_SESSION['email'] = $user['email'];
+                if (!empty($user['student_id'])) {
+                    $_SESSION['student_id'] = $user['student_id'];
+                }
+                $_SESSION['email'] = $user['email'] ?? null;
                 $_SESSION['user_type'] = $user['user_type'];
                 $_SESSION['first_name'] = $user['first_name'];
                 $_SESSION['last_name'] = $user['last_name'];
-                $_SESSION['full_name'] = $user['first_name'] . ' ' . $user['last_name'];
+                $_SESSION['full_name'] = trim($user['first_name'] . ' ' . $user['last_name']);
 
-                // Redirect based on role
+                // Redirect
                 if ($user['user_type'] === 'admin') {
-                    header("Location: ./dist/admin/dashboard.php");
-                    exit;
-                } elseif ($user['user_type'] === 'student') {
-                    header("Location: ./student-dashboard.php");
-                    exit;
-                } else {
+    header("Location: dist/admin/dashboard.php");
+    exit;
+} elseif ($user['user_type'] === 'student') {
+    header("Location: dist/student/dashboard.php");
+    exit;
+}
+ else {
                     $error = "Unauthorized role.";
                 }
             } else {
-                $error = "Invalid email or password.";
+                $error = "Invalid username or password.";
             }
         } catch (PDOException $e) {
-            $error = "Database error: " . $e->getMessage();
+            error_log("DB error on login: " . $e->getMessage());
+            $error = "Database error. Contact admin.";
         }
     } else {
         $error = "Please fill in all fields.";
     }
 }
+
+
 ?>
 <!doctype html>
 <html lang="en" data-pc-preset="preset-1" data-pc-sidebar-caption="true" data-pc-direction="ltr" dir="ltr" data-pc-theme="light">
@@ -537,15 +552,26 @@ if (isset($_POST['submit'])) {
                 
                 <!-- Login Form -->
                 <form method="POST" action="">
-                    <div class="form-group">
-                        <label for="email" class="form-label">Username</label>
-                        <div class="input-wrapper">
-                            <span class="input-icon">
-                                <i class="fas fa-envelope"></i>
-                            </span>
-                            <input type="email" id="email" name="email" class="form-input" placeholder="Enter your email address" required value="<?php echo isset($_POST['email']) ? htmlspecialchars($_POST['email']) : ''; ?>">
-                        </div>
-                    </div>
+                 <div class="form-group">
+  <label for="username" class="form-label">Username</label>
+  <div class="input-wrapper">
+    <span class="input-icon">
+      <i class="fas fa-user"></i>
+    </span>
+    <!-- use type="text" and name="username" so students can enter numeric IDs -->
+    <input
+      type="text"
+      id="username"
+      name="username"
+      inputmode="numeric"
+      class="form-input"
+      placeholder="Enter Student ID or Email"
+      required
+      value="<?php echo isset($_POST['username']) ? htmlspecialchars($_POST['username']) : ''; ?>"
+    />
+  </div>
+</div>
+
                     
                     <div class="form-group">
                         <label for="password" class="form-label">Password</label>
@@ -588,7 +614,20 @@ if (isset($_POST['submit'])) {
 
     
     <script>
-      
+      function togglePassword() {
+  const passwordInput = document.getElementById("password");
+  const toggleIcon = document.getElementById("toggleIcon");
+
+  if (passwordInput.type === "password") {
+    passwordInput.type = "text";
+    toggleIcon.classList.remove("fa-eye");
+    toggleIcon.classList.add("fa-eye-slash");
+  } else {
+    passwordInput.type = "password";
+    toggleIcon.classList.remove("fa-eye-slash");
+    toggleIcon.classList.add("fa-eye");
+  }
+}
       layout_change('false');
       layout_theme_sidebar_change('dark');
       change_box_container('false');
